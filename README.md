@@ -1,0 +1,2 @@
+# sample_redmine_azfunc
+redmineに対してAzureFunctionsをトリガにして色々実験してみるためのリポジトリ
