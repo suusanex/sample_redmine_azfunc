@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using NuGet.Frameworks;
 using NUnit.Framework;
 using redmine_rss_func;
 
@@ -50,6 +51,11 @@ namespace test_redmine_rss_func
                 Assert.That(int.TryParse(issueIdStr, out var issueId), Is.True);
 
                 var ret2 = await target.GetAttachmentsInfo(issueId, null);
+
+                Assert.That(ret2.isIncludeAttachments);
+
+                Assert.That(ret2.attachmentsUrls.First(), Is.EqualTo("http://redmine-test1-server.japaneast.cloudapp.azure.com/attachments/download/1/testdata.txt"));
+
             }
 
         }

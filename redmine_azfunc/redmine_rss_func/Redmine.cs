@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.Azure.WebJobs;
@@ -74,7 +75,7 @@ namespace redmine_rss_func
                     var attachmentIds = new List<int>();
 
                     {
-                        var reqUrl = $"{m_RedmineRootUrl}issues/{issueId}.xml?include=journals";
+                        var reqUrl = $"{m_RedmineRootUrl}issues/{issueId}.json?include=journals";
                         var req = new HttpRequestMessage(HttpMethod.Get, reqUrl);
                         req.Headers.Add("X-Redmine-API-Key", apiKey);
 
@@ -86,24 +87,35 @@ namespace redmine_rss_func
                         }
 
                         var resStr = await res.Content.ReadAsStringAsync();
-                        m_Log.LogInformation($"get xml {resStr}");
-                        var xdoc = XDocument.Parse(resStr);
-                        var xns = xdoc.Root.Name.Namespace;
+                        m_Log.LogInformation($"get json, {resStr}");
+                        var node = JsonNode.Parse(resStr);
 
-                        var journals = xdoc.Descendants(xns + "journals").FirstOrDefault();
-                        if (journals != null)
+                        var journals = node?["issue"]?["journals"];
+                        if (journals == null)
                         {
-                            foreach (var journal in journals.Elements())
-                            {
-                                var details = journal.Element(xns + "details");
-                                if(details?.Element(xns + "property")?.Value != "attachment") continue;
+                            m_Log.LogInformation($"issue ID={issueId} journals is null");
+                            return (false, Array.Empty<string>());
 
-                                if(int.TryParse(details.Element(xns + "name")?.Value, out int id))
+                        }
+
+                        foreach (var journal in journals.AsArray())
+                        {
+                            var details = journal["details"];
+                            if(details == null) continue;
+                            foreach (var detail in details.AsArray())
+                            {
+                                if(detail?["property"]?.GetValue<string>() != "attachment") continue;
+
+                                if (!int.TryParse(detail!["name"]?.GetValue<string>(), out int id))
                                 {
-                                    m_Log.LogInformation($"Attachment Found Id={id}");
-                                    attachmentIds.Add(id);
+                                    continue;
                                 }
+
+                                m_Log.LogInformation($"Attachment Found Id={id}");
+                                attachmentIds.Add((int)id);
+
                             }
+
                         }
                     }
 
@@ -111,8 +123,10 @@ namespace redmine_rss_func
                     foreach (var attachmentId in attachmentIds)
                     {
                         
-                        var reqUrl = $"{m_RedmineProjectRootUrl}attachments/{attachmentId}.xml";
-                        var res = await client.GetAsync(reqUrl);
+                        var reqUrl = $"{m_RedmineRootUrl}attachments/{attachmentId}.json";
+                        var req = new HttpRequestMessage(HttpMethod.Get, reqUrl);
+                        req.Headers.Add("X-Redmine-API-Key", apiKey);
+                        var res = await client.SendAsync(req);
                         if (!res.IsSuccessStatusCode)
                         {
                             throw new Exception(
@@ -120,11 +134,20 @@ namespace redmine_rss_func
                         }
 
                         var resStr = await res.Content.ReadAsStringAsync();
+                        m_Log.LogInformation($"get json, {resStr}");
 
-                        var xdoc = XDocument.Parse(resStr);
-                        var xns = xdoc.Root.Name.Namespace;
+                        var node = JsonNode.Parse(resStr);
+                        
+                        var url = node?["attachment"]?["content_url"];
+                        if (url == null)
+                        {
+                            m_Log.LogWarning($"Attachment URL Not Found, id={attachmentId}");
+                            continue;
+                        }
 
-                        attachmentUrls.Add(xdoc.Descendants(xns + "content_url").First().Value);
+                        var urlStr = url.GetValue<string>();
+                        m_Log.LogInformation($"attachmentUrl Add, {urlStr}");
+                        attachmentUrls.Add(urlStr);
 
                     }
 
