@@ -28,7 +28,7 @@ namespace redmine_rss_func
         private readonly ILogger m_Log;
 
 
-        public async Task<(bool isChanged, IEnumerable<XElement> updateEntry)> RSSCheck()
+        public async Task<(bool isChanged, IEnumerable<UpdateDocumentItem> updateEntry)> RSSCheck(UpdateDocumentItem lastEntry)
         {
             var rssUrl = $"{m_RedmineProjectRootUrl}activity.atom";
 
@@ -52,10 +52,23 @@ namespace redmine_rss_func
                 var xns = xdoc.Root.Name.Namespace;
                 var entries = xdoc.Descendants(xns + "entry");
 
-                //TODO:とりあえず、最新のエントリを常に「更新あり」とする
-                var updateEntry = entries.Take(1);
+                var entryItems = entries.Select(d => new UpdateDocumentItem
+                {
+                    Updated = d.Element("updated")?.Value,
+                    Id = d.Element("id")?.Value,
+                    Title = d.Element("title")?.Value,
+                });
 
-                return (true, updateEntry);
+                if (lastEntry != null && DateTime.TryParse(lastEntry.Updated, out var lastUpdated))
+                {
+                    var newItems = entryItems.Where(d => DateTime.TryParse(d.Updated, out var updated) && lastUpdated < updated).ToArray();
+                    return (newItems.Any(), newItems);
+                }
+                else
+                {
+                    return (true, entryItems);
+                }
+
 
             }
 

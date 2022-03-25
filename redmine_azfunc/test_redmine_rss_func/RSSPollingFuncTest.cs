@@ -30,15 +30,13 @@ namespace test_redmine_rss_func
             
             var target = new Redmine(m_Logger);
 
-            var ret = await target.RSSCheck();
+            var ret = await target.RSSCheck(null);
 
             foreach (var entry in ret.updateEntry)
             {
                 m_Logger.LogInformation(entry.ToString());
-
-                var xns = entry.Name.Namespace;
-
-                var issueIdUrl = entry.Element(xns + "id")?.Value;
+                
+                var issueIdUrl = entry.Id;
                 if (issueIdUrl == null)
                 {
                     m_Logger.LogWarning($"id Get Fail, {entry}");

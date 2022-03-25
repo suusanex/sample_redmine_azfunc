@@ -5,7 +5,7 @@ VisualStudioVersion = 17.0.32014.148
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "redmine_rss_func", "redmine_rss_func\redmine_rss_func.csproj", "{FB461E33-C8EA-46FE-9EE4-A4D38166554C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "test_redmine_rss_func", "test_redmine_rss_func\test_redmine_rss_func.csproj", "{ADEAE6F6-7657-4DCB-BEB3-1A7F77D0BEED}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "test_redmine_rss_func", "test_redmine_rss_func\test_redmine_rss_func.csproj", "{ADEAE6F6-7657-4DCB-BEB3-1A7F77D0BEED}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

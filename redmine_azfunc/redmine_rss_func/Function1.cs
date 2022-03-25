@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,15 +29,33 @@ namespace redmine_rss_func
             context.ContinueAsNew(null);
 
         }
-
+        
         [FunctionName("RSSPollingFunc")]
-        public static async Task<(bool isChanged, IEnumerable<XElement> updateEntry)> RSSPollingFunc([ActivityTrigger] IDurableActivityContext context, ILogger log)
+        public static async Task<(bool isChanged, IEnumerable<UpdateDocumentItem> updateEntry)> RSSPollingFunc([ActivityTrigger] IDurableActivityContext context, ILogger log,
+            [CosmosDB("RssCheckData", "Items",
+                ConnectionStringSetting = "DbRssCheckDataConnectString",
+                SqlQuery = "select * from UpdateDocumentItems d ORDER BY d.Updated DESC OFFSET 0 LIMIT 1")]
+            IEnumerable<UpdateDocumentItem> updateDocumentLatest,
+            [CosmosDB("RssCheckData", "Items",
+                ConnectionStringSetting = "DbRssCheckDataConnectString")]
+            IAsyncCollector<UpdateDocumentItem> updateDocumentOut)
         {
-            log.LogInformation($"RSSPollingFunc Start");
+            var updateLatest = updateDocumentLatest.FirstOrDefault();
+            log.LogInformation($"RSSPollingFunc Start, Latest={updateLatest}");
 
             var inst = new Redmine(log);
-            return await inst.RSSCheck();
+            var checkResult = await inst.RSSCheck(updateLatest);
+            if (checkResult.isChanged)
+            {
+                foreach (var item in checkResult.updateEntry)
+                {
+                    await updateDocumentOut.AddAsync(item);
+                }
+            }
 
+            log.LogInformation($"RSSPollingFunc Result, isChanged={checkResult.isChanged}, UpdateItems={string.Join(", ", checkResult.updateEntry)}");
+
+            return checkResult;
         }
 
         //[FunctionName("Function1_Hello")]
