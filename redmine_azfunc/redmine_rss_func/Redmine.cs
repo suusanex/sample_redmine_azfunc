@@ -31,11 +31,7 @@ namespace redmine_rss_func
         public async Task<(bool isChanged, IEnumerable<UpdateDocumentItem> updateEntry)> RSSCheck(UpdateDocumentItem lastEntry)
         {
             var rssUrl = $"{m_RedmineProjectRootUrl}activity.atom";
-
-            var userName = "testuser1";
-
-            var password = "urG8p7dq";
-
+            
             var atomKey = "f6012197692df72c5bb59698430e8143aeff13bb";
 
             using var client = new HttpClient();
@@ -54,14 +50,14 @@ namespace redmine_rss_func
 
                 var entryItems = entries.Select(d => new UpdateDocumentItem
                 {
-                    Updated = d.Element("updated")?.Value,
-                    Id = d.Element("id")?.Value,
-                    Title = d.Element("title")?.Value,
+                    Updated = DateTime.TryParse(d.Element(xns + "updated")?.Value, out var updated) ? updated.ToUniversalTime() : null,
+                    IssueId = d.Element(xns + "id")?.Value,
+                    Title = d.Element(xns + "title")?.Value,
                 });
 
-                if (lastEntry != null && DateTime.TryParse(lastEntry.Updated, out var lastUpdated))
+                if (lastEntry?.Updated != null)
                 {
-                    var newItems = entryItems.Where(d => DateTime.TryParse(d.Updated, out var updated) && lastUpdated < updated).ToArray();
+                    var newItems = entryItems.Where(d => lastEntry.Updated < d.Updated).ToArray();
                     return (newItems.Any(), newItems);
                 }
                 else
@@ -124,7 +120,7 @@ namespace redmine_rss_func
                                     continue;
                                 }
 
-                                m_Log.LogInformation($"Attachment Found Id={id}");
+                                m_Log.LogInformation($"Attachment Found IssueId={id}");
                                 attachmentIds.Add((int)id);
 
                             }

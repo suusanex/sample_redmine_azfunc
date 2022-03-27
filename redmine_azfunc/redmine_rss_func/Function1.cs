@@ -21,7 +21,7 @@ namespace redmine_rss_func
             [OrchestrationTrigger] IDurableOrchestrationContext context)
         {
             var rssResult =
-                await context.CallActivityAsync<(bool isChanged, IEnumerable<XElement> updateEntry)>("RSSPollingFunc", null);
+                await context.CallActivityAsync<(bool isChanged, IEnumerable<UpdateDocumentItem> updateEntry)>("RSSPollingFunc", null);
 
 
             await context.CreateTimer(context.CurrentUtcDateTime.AddMinutes(1), CancellationToken.None);
@@ -31,6 +31,12 @@ namespace redmine_rss_func
         }
         
         [FunctionName("RSSPollingFunc")]
+        //public static async Task<(bool isChanged, IEnumerable<UpdateDocumentItem> updateEntry)> RSSPollingFunc([ActivityTrigger] IDurableActivityContext context, ILogger log
+        //    ,
+        //[CosmosDB("RssCheckData", "Items",
+        //        ConnectionStringSetting = "DbRssCheckDataConnectString",
+        //        SqlQuery = "select * from UpdateDocumentItems d ORDER BY d.Updated DESC OFFSET 0 LIMIT 1")]
+        //    IEnumerable<UpdateDocumentItem> updateDocumentLatest)
         public static async Task<(bool isChanged, IEnumerable<UpdateDocumentItem> updateEntry)> RSSPollingFunc([ActivityTrigger] IDurableActivityContext context, ILogger log,
             [CosmosDB("RssCheckData", "Items",
                 ConnectionStringSetting = "DbRssCheckDataConnectString",
@@ -40,22 +46,32 @@ namespace redmine_rss_func
                 ConnectionStringSetting = "DbRssCheckDataConnectString")]
             IAsyncCollector<UpdateDocumentItem> updateDocumentOut)
         {
+            log.LogInformation($"RSSPollingFunc Start");
             var updateLatest = updateDocumentLatest.FirstOrDefault();
             log.LogInformation($"RSSPollingFunc Start, Latest={updateLatest}");
 
-            var inst = new Redmine(log);
-            var checkResult = await inst.RSSCheck(updateLatest);
-            if (checkResult.isChanged)
+            try
             {
-                foreach (var item in checkResult.updateEntry)
+                var inst = new Redmine(log);
+                var checkResult = await inst.RSSCheck(updateLatest);
+                if (checkResult.isChanged)
                 {
-                    await updateDocumentOut.AddAsync(item);
+                    foreach (var item in checkResult.updateEntry)
+                    {
+                        await updateDocumentOut.AddAsync(item);
+                    }
                 }
+
+                log.LogInformation($"RSSPollingFunc Result, isChanged={checkResult.isChanged}, UpdateItems={string.Join(", ", checkResult.updateEntry)}");
+
+                return checkResult;
             }
+            catch (Exception e)
+            {
+                log.LogWarning($"Exception, {e}");
 
-            log.LogInformation($"RSSPollingFunc Result, isChanged={checkResult.isChanged}, UpdateItems={string.Join(", ", checkResult.updateEntry)}");
-
-            return checkResult;
+                return (false, Array.Empty<UpdateDocumentItem>());
+            }
         }
 
         //[FunctionName("Function1_Hello")]

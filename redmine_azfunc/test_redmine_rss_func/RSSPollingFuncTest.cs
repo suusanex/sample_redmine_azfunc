@@ -32,11 +32,13 @@ namespace test_redmine_rss_func
 
             var ret = await target.RSSCheck(null);
 
-            foreach (var entry in ret.updateEntry)
+            var updateEntries = ret.updateEntry.ToArray();
+            var lastUpdateEntry = updateEntries.First();
+            foreach (var entry in updateEntries)
             {
                 m_Logger.LogInformation(entry.ToString());
                 
-                var issueIdUrl = entry.Id;
+                var issueIdUrl = entry.IssueId;
                 if (issueIdUrl == null)
                 {
                     m_Logger.LogWarning($"id Get Fail, {entry}");
@@ -55,6 +57,13 @@ namespace test_redmine_rss_func
                 Assert.That(ret2.attachmentsUrls.First(), Is.EqualTo("http://redmine-test1-server.japaneast.cloudapp.azure.com/attachments/download/1/testdata.txt"));
 
             }
+
+            var retUpdate = await target.RSSCheck(new UpdateDocumentItem
+            {
+                Updated = lastUpdateEntry.Updated,
+            });
+
+            Assert.That(retUpdate.isChanged, Is.False);
 
         }
 
