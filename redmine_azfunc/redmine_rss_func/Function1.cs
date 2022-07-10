@@ -23,20 +23,64 @@ namespace redmine_rss_func
             var rssResult =
                 await context.CallActivityAsync<(bool isChanged, IEnumerable<UpdateDocumentItem> updateEntry)>("RSSPollingFunc", null);
 
+            if (rssResult.isChanged)
+            {
+                await context.CallActivityAsync<(bool isChanged, IEnumerable<UpdateDocumentItem> updateEntry)>("OnDetectChanged", rssResult.updateEntry);
+
+            }
 
             await context.CreateTimer(context.CurrentUtcDateTime.AddMinutes(1), CancellationToken.None);
 
             context.ContinueAsNew(null);
 
         }
-        
+
+        [FunctionName("OnDetectChanged")]
+        public static async Task OnDetectChanged([ActivityTrigger] IDurableActivityContext context, ILogger log)
+        {
+            //更新されたIssueのIDを受け取り、そこから添付ファイルがあるかどうかを取得し、有る場合は添付ファイルをダウンロードする
+
+            var updateItems = context.GetInput<IEnumerable<UpdateDocumentItem>>();
+
+            var inst = new Redmine(log);
+
+            foreach (var entry in updateItems)
+            {
+                log.LogInformation(entry.ToString());
+
+                var issueIdUrl = entry.IssueId;
+                if (issueIdUrl == null)
+                {
+                    log.LogWarning($"id Get Fail, {entry}");
+                    continue;
+                }
+
+                var issueIdStr = new Uri(issueIdUrl).PathAndQuery.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
+
+
+                if (!int.TryParse(issueIdStr, out var issueId))
+                {
+                    log.LogWarning($"id Parse Fail, {entry}");
+                    continue;
+                }
+
+                var attInfo = await inst.GetAttachmentsInfo(issueId, null);
+
+                if (!attInfo.isIncludeAttachments)
+                {
+                    log.LogInformation($"No Attachments, {entry}");
+                    continue;
+                }
+                
+                //TODO:添付ファイルのDL
+
+            }
+
+
+
+        }
+
         [FunctionName("RSSPollingFunc")]
-        //public static async Task<(bool isChanged, IEnumerable<UpdateDocumentItem> updateEntry)> RSSPollingFunc([ActivityTrigger] IDurableActivityContext context, ILogger log
-        //    ,
-        //[CosmosDB("RssCheckData", "Items",
-        //        ConnectionStringSetting = "DbRssCheckDataConnectString",
-        //        SqlQuery = "select * from UpdateDocumentItems d ORDER BY d.Updated DESC OFFSET 0 LIMIT 1")]
-        //    IEnumerable<UpdateDocumentItem> updateDocumentLatest)
         public static async Task<(bool isChanged, IEnumerable<UpdateDocumentItem> updateEntry)> RSSPollingFunc([ActivityTrigger] IDurableActivityContext context, ILogger log,
             [CosmosDB("RssCheckData", "Items",
                 ConnectionStringSetting = "DbRssCheckDataConnectString",
