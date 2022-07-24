@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -32,7 +33,7 @@ namespace redmine_rss_func
         {
             var rssUrl = $"{m_RedmineProjectRootUrl}activity.atom";
             
-            var atomKey = "f6012197692df72c5bb59698430e8143aeff13bb";
+            var atomKey = "YourAtomKey";
 
             using var client = new HttpClient();
             {
@@ -74,7 +75,7 @@ namespace redmine_rss_func
         public async Task<(bool isIncludeAttachments, IEnumerable<string> attachmentsUrls)> GetAttachmentsInfo(
             int issueId, int? journalId)
         {
-            var apiKey = "6f81e2188cb2183f3244791d85c5cccee1818221";
+            var apiKey = "YourApiKey";
 
             if (journalId == null)
             {
@@ -176,6 +177,16 @@ namespace redmine_rss_func
                 throw new NotImplementedException();
 
             }
+        }
+
+        public HttpRequestMessage MakeRequestGetStream(string requestUri)
+        {
+            var apiKey = "YourApiKey";
+
+            var req = new HttpRequestMessage(HttpMethod.Get, requestUri);
+            req.Headers.Add("X-Redmine-API-Key", apiKey);
+
+            return req;
         }
 
     }

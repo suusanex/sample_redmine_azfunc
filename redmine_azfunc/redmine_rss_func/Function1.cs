@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,20 +31,23 @@ namespace redmine_rss_func
 
             }
 
-            await context.CreateTimer(context.CurrentUtcDateTime.AddMinutes(1), CancellationToken.None);
+            //await context.CreateTimer(context.CurrentUtcDateTime.AddMinutes(1), CancellationToken.None);
 
-            context.ContinueAsNew(null);
+            //context.ContinueAsNew(null);
 
         }
 
         [FunctionName("OnDetectChanged")]
-        public static async Task OnDetectChanged([ActivityTrigger] IDurableActivityContext context, ILogger log)
+        public static async Task OnDetectChanged([ActivityTrigger] IDurableActivityContext context, ILogger log,
+            Binder binder)
         {
-            //XV‚³‚ê‚½Issue‚ÌID‚ğó‚¯æ‚èA‚»‚±‚©‚ç“Y•tƒtƒ@ƒCƒ‹‚ª‚ ‚é‚©‚Ç‚¤‚©‚ğæ“¾‚µA—L‚éê‡‚Í“Y•tƒtƒ@ƒCƒ‹‚ğƒ_ƒEƒ“ƒ[ƒh‚·‚é
+            //æ›´æ–°ã•ã‚ŒãŸIssueã®IDã‚’å—ã‘å–ã‚Šã€ãã“ã‹ã‚‰æ·»ä»˜ãƒ•ã‚¡ã‚¤ãƒ«ãŒã‚ã‚‹ã‹ã©ã†ã‹ã‚’å–å¾—ã—ã€æœ‰ã‚‹å ´åˆã¯æ·»ä»˜ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ã™ã‚‹
 
             var updateItems = context.GetInput<IEnumerable<UpdateDocumentItem>>();
 
             var inst = new Redmine(log);
+
+            using var httpClient = new HttpClient();
 
             foreach (var entry in updateItems)
             {
@@ -72,7 +77,44 @@ namespace redmine_rss_func
                     continue;
                 }
                 
-                //TODO:“Y•tƒtƒ@ƒCƒ‹‚ÌDL
+                //æ·»ä»˜ãƒ•ã‚¡ã‚¤ãƒ«ã®DLï¼ˆç¾ãƒãƒ¼ã‚¸ãƒ§ãƒ³ã§ã¯ã€æœ€åˆã®1ã¤ã ã‘ã¨ã™ã‚‹ï¼‰
+
+                foreach (var attUrl in attInfo.attachmentsUrls)
+                {
+                    var attFileName = new Uri(attUrl).PathAndQuery.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
+
+                    var req = inst.MakeRequestGetStream(attUrl);
+
+                    var res = await httpClient.SendAsync(req).ConfigureAwait(false);
+                    if (!res.IsSuccessStatusCode)
+                    {
+                        throw new Exception(
+                            $"issue ID={issueId} Attach Get Fail, {nameof(res.StatusCode)}={res.StatusCode}, {await res.Content.ReadAsStringAsync()} {attUrl}");
+                    }
+                    
+                    await using var fileDlStream = await res.Content.ReadAsStreamAsync().ConfigureAwait(false);
+
+                    await using var blob = await binder
+                        .BindAsync<Stream>(new BlobAttribute($"https://redminerssstorage.blob.core.windows.net/data/{attFileName}", FileAccess.Write)
+                        {
+                            Connection = "DataStorage",
+                        }).ConfigureAwait(false);
+
+
+                    var buf = new byte[10 * 1024];
+
+                    do
+                    {
+                        var readSize = await fileDlStream.ReadAsync(buf, 0, buf.Length).ConfigureAwait(false);
+                        if (readSize <= 0) break;
+
+                        await blob.WriteAsync(buf, 0, readSize).ConfigureAwait(false);
+
+                    } while (true);
+
+                }
+
+
 
             }
 
